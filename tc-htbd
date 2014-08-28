@@ -1,0 +1,187 @@
+#!/bin/bash
+#####################################
+# Made by a kitty on a tty
+#####################################
+# General TC documentaion : http://wiki.linuxwall.info/doku.php/en:ressources:dossiers:networking:traffic_control
+################
+#BODY CONSTANTS#
+################
+TC=/sbin/tc
+IPT=/sbin/iptables
+IF1=eth0        # Interface1 (OUTSIDE)
+IF2=eth1        # Interface2 (INSIDE)
+CEIL=100mbit    # Overall Bandwidth ceiling in Mbps
+CONF=/etc/sysconfig/tc-htb.conf # Conf file syntax : IP1-public IP2-private DOWNLOADCLASS UPLOADCLASS PRIORITY
+
+###########
+#FUNCTIONS#
+###########
+sethosts()
+{
+  while read IP1 IP2 DNLD UPLD PRIO; do
+	#This is where we will actually apply host settings from the conf-file, now that everythign else is setup...
+	[[ ${DEBUG} ]] && echo "$IP1 $IP2 $DNLD $UPLD $PRIO"
+	$TC filter add dev $IF1 parent 1:0 protocol ip prio $PRIO handle $DNLD fw flowid 1:$DNLD
+        $TC filter add dev $IF2 parent 1:0 protocol ip prio $PRIO handle $UPLD fw flowid 1:$UPLD
+	$IPT -t mangle -A POSTROUTING -o $IF1 -s $IP1 -j CONNMARK --set-mark $DNLD
+        $IPT -t mangle -A POSTROUTING -o $IF2 -d $IP2 -j CONNMARK --set-mark $UPLD
+  done < $1
+}
+
+bwclass()
+{
+	###################################################################################
+	# Let's setup some classes to limit bandwidth
+	# SFQ is used to fairly balance connections within a class bucket.
+	####################################################################################
+	# 10mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:10 htb rate 10mbit ceil 14mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:10 htb rate 10mbit ceil 14mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:10 handle 110 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:10 handle 110 sfq perturb 10 limit 32
+	# 20mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:20 htb rate 20mbit ceil 24mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:20 htb rate 20mbit ceil 24mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:20 handle 20 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:20 handle 20 sfq perturb 10 limit 32
+	# 30mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:30 htb rate 30mbit ceil 34mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:30 htb rate 30mbit ceil 34mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:30 handle 130 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:30 handle 130 sfq perturb 10 limit 32
+	# 40mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:40 htb rate 40mbit ceil 44mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:40 htb rate 40mbit ceil 44mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:40 handle 40 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:40 handle 40 sfq perturb 10 limit 32
+	# 50 mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:50 htb rate 50mbit ceil 54mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:50 htb rate 50mbit ceil 54mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:50 handle 50 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:50 handle 50 sfq perturb 10 limit 32
+	# 60 mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:60 htb rate 60mbit ceil 64mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:60 htb rate 60mbit ceil 64mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:60 handle 60 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:60 handle 60 sfq perturb 10 limit 32
+	# 70 mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:70 htb rate 70mbit ceil 74mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:70 htb rate 70mbit ceil 74mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:70 handle 70 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:70 handle 70 sfq perturb 10 limit 32
+	# 80 mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:80 htb rate 80mbit ceil 84mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:80 htb rate 80mbit ceil 84mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:80 handle 80 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:80 handle 80 sfq perturb 10 limit 32
+	# 90 mbit
+	$TC class add dev $IF1 parent 1:1 classid 1:90 htb rate 90mbit ceil 94mbit burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:90 htb rate 90mbit ceil 94mbit burst 15k
+        $TC qdisc add dev $IF1 parent 1:90 handle 90 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:90 handle 90 sfq perturb 10 limit 32
+	# 100 mbit - Default class, so low guaranteed limit, with CEIL available
+	$TC class add dev $IF1 parent 1:1 classid 1:100 htb rate 5mbit ceil $CEIL burst 15k
+	$TC class add dev $IF2 parent 1:1 classid 1:100 htb rate 5mbit ceil $CEIL burst 15k
+        $TC qdisc add dev $IF1 parent 1:100 handle 1100 sfq perturb 10 limit 32
+        $TC qdisc add dev $IF2 parent 1:100 handle 1100 sfq perturb 10 limit 32
+}
+
+start ()
+{
+	###########
+	# ROOT Handle
+	$TC qdisc add dev $IF1 root handle 1: htb default 100
+	$TC qdisc add dev $IF2 root handle 1: htb default 100
+	###########
+	# Parent class
+	$TC class add dev $IF1 parent 1: classid 1:1 htb rate $CEIL burst 15k
+	$TC class add dev $IF2 parent 1: classid 1:1 htb rate $CEIL burst 15k
+	###########
+	# The bwclass function will setup some classes that will define rates which we can use later
+	bwclass
+	###########
+	# The sethosts function will setup our ip filters based on a conf file
+	sethosts $CONF
+	###########
+	# This will actually keep track of our marks added in sethosts
+	$IPT -t mangle -A POSTROUTING -j CONNMARK --restore-mark
+}
+
+#############################################################################################
+# Just some logic to add daemon like function below, you proably don't need to look below...
+# Only thing is make sure you shut down shapeing before changing the conf-file.
+#############################################################################################
+stop() {
+# Stop the bandwidth shaping.
+    $TC qdisc del dev $IF1 root
+    $TC qdisc del dev $IF2 root
+    while read IP1 IP2 DNLD UPLD PRIO; do
+        [[ ${DEBUG} ]] && echo "$IP1 $IP2 $DNLD $UPLD $PRIO"
+        $IPT -t mangle -A POSTROUTING -o $IF1 -s $IP1 -j CONNMARK --set-mark $DNLD
+        $IPT -t mangle -A POSTROUTING -o $IF2 -d $IP2 -j CONNMARK --set-mark $UPLD
+    done < $1
+}
+
+restart() {
+# Self-explanatory.
+    stop $CONF
+    sleep 1
+    start
+}
+
+show() {
+# Display status of traffic control status.
+    echo -e "\n\n--------Status--------\n"
+    echo "####[qdisc]####"
+    $TC -s -d qdisc show dev $IF1
+    echo "####[class]####"
+    $TC -s -d class show dev $IF1
+    echo "####[filter]####"
+    $TC -s -d filter show dev $IF1 parent 1:1
+    echo -e "\n\n--------Status--------\n"
+    echo "####[qdisc]####"
+    $TC -s qdisc show dev $IF2
+    echo "####[class]####"
+    $TC -s -d class show dev $IF2
+    echo "####[filter]####"
+    $TC -s -d filter show dev $IF2 parent 1:1
+}
+
+case "$1" in
+
+  start)
+
+    echo -n "Starting bandwidth shaping: "
+    start
+    echo "done"
+    ;;
+
+  stop)
+
+    echo -n "Stopping bandwidth shaping: "
+    stop $CONF
+    echo "done"
+    ;;
+
+  restart)
+
+    echo -n "Restarting bandwidth shaping: "
+    restart
+    echo "done"
+    ;;
+
+  show)
+
+    show
+    echo ""
+    ;;
+
+  *)
+
+    pwd=$(pwd)
+    echo "Usage: tc-htb {start|stop|restart|show}"
+    ;;
+
+esac
+
+exit 0
